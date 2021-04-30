@@ -1,8 +1,18 @@
 [package]
 name = "const-gen-derive"
 version = "0.1.0"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
 authors = ["Griffin O'Neill <gsoneill1003@gmail.com>"]
+description = """
+Cross-platform named-pipe API.
+"""
 edition = "2018"
+keywords = ["const", "constants", "compile-time", "build"]
+homepage = "https://github.com/Eolu/const-gen-derive"
+repository = "https://github.com/Eolu/const-gen-derive"
+categories = ["accessibility", "config", "development-tools::build-utils"]
+documentation = "https://docs.rs/const_gen_derive"
 
 [lib]
 proc-macro = true
@@ -11,4 +21,3 @@ proc-macro = true
 syn = "1.0"
 quote = "1.0"
 proc-macro2 = "1.0"
-
