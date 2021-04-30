@@ -1,11 +1,11 @@
 [package]
 name = "const-gen-derive"
-version = "0.1.1"
+version = "0.1.2"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 authors = ["Griffin O'Neill <gsoneill1003@gmail.com>"]
 description = """
-Cross-platform named-pipe API.
+A derive macro for the const-gen crate.
 """
 edition = "2018"
 keywords = ["const", "constants", "compile-time", "build"]
