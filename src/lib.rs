@@ -15,7 +15,6 @@ fn impl_macro(ast: &syn::DeriveInput) -> TokenStream
 {
     let name = &ast.ident;
     let generics = &ast.generics;
-    let vis = &ast.vis;
     let val_impl: proc_macro2::TokenStream = match &ast.data
     {
         syn::Data::Struct(data) => struct_val_handler(name, &data.fields),
@@ -84,15 +83,11 @@ fn impl_macro(ast: &syn::DeriveInput) -> TokenStream
                 #val_impl
             }
 
-            fn const_definition(attrs: &str) -> String
+            fn const_definition(attrs: &str, vis: &str) -> String
             {
-                let vis = stringify!(#vis);
                 let mut definition = String::from(attrs);
-                if !vis.is_empty()
-                {
-                    definition += vis;
-                    definition += " ";
-                }
+                definition += " ";
+                definition += vis;
                 definition += &{#def_impl};
                 definition
             }
