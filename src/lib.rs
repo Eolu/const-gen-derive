@@ -34,12 +34,14 @@ fn impl_macro(ast: &syn::DeriveInput) -> TokenStream
         }
         syn::Data::Union(data) => 
         {
+            let vis = get_field_visibilities(&data.fields.named).into_iter().next().unwrap();
             let ident = get_field_idents(&data.fields.named).into_iter().next().unwrap();
             quote!
             {
                 format!
                 (
-                    "{} {{ {}: {}}}", 
+                    "{} {} {{ {}: {}}}", 
+                    stringify!(#vis), 
                     stringify!(#name), 
                     stringify!(#ident), 
                     self.#ident.const_val()
@@ -53,12 +55,13 @@ fn impl_macro(ast: &syn::DeriveInput) -> TokenStream
         syn::Data::Enum(data) => enum_def_handler(name, generics, data.variants.iter().collect()),
         syn::Data::Union(data) => 
         {
+            let vis = get_field_visibilities(&data.fields.named);
             let idents = get_field_idents(&data.fields.named);
             let types = get_field_types(&data.fields.named);
             quote!
             {
                 let mut f = String::new();
-                #( f.push_str(&format!("{}: {}, ", stringify!(#idents), <#types>::const_type())); )*
+                #( f.push_str(&format!("{} {}: {}, ", stringify!(#vis), stringify!(#idents), <#types>::const_type())); )*
                 format!
                 (
                     "union {}{}{{ {}}}", 
@@ -103,12 +106,13 @@ fn struct_def_handler(name: &syn::Ident, generics: &syn::Generics, fields: &syn:
     {
         syn::Fields::Named(f) => 
         {
+            let vis = get_field_visibilities(&f.named);
             let idents = get_field_idents(&f.named);
             let types = get_field_types(&f.named);
             quote!
             {
                 let mut f = String::new();
-                #( f.push_str(&format!("{}: {}, ", stringify!(#idents), <#types>::const_type())); )*
+                #( f.push_str(&format!("{} {}: {}, ", stringify!(#vis), stringify!(#idents), <#types>::const_type())); )*
                 format!
                 (
                     "struct {}{}{{ {}}}", 
@@ -301,6 +305,12 @@ fn enum_variant_def_handler(var_name: &syn::Ident, fields: &syn::Fields) -> proc
         },
         syn::Fields::Unit => quote!(format!("{},", stringify!(#var_name)))
     }
+}
+
+/// Get visibility of named fields
+fn get_field_visibilities(fields: &syn::punctuated::Punctuated<syn::Field, syn::token::Comma>) -> Vec<&syn::Visibility>
+{
+    fields.iter().map(|field|&field.vis).collect()
 }
 
 /// Get identifiers of named fields
