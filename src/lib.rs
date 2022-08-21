@@ -3,9 +3,11 @@ use proc_macro2::Span;
 use quote::quote;
 use syn;
 
+const DOC_ATTR: &'static str = "inherit_doc";
+
 /// Derives the CompileConst trait for structs and enums. Requires that all
 /// fields also implement the CompileConst trait.
-#[proc_macro_derive(CompileConst)]
+#[proc_macro_derive(CompileConst, attributes(inherit_doc))]
 pub fn const_gen_derive(input: TokenStream) -> TokenStream 
 {
     impl_macro(&syn::parse(input).unwrap())
@@ -72,6 +74,7 @@ fn impl_macro(ast: &syn::DeriveInput) -> TokenStream
             }
         }
     };
+    let doc_attr = get_docs(&ast.attrs).map_or(String::new(), |attr| quote!(#attr).to_string());
     let gen = quote!
     {
         impl const_gen::CompileConst for #name #generics
@@ -89,6 +92,7 @@ fn impl_macro(ast: &syn::DeriveInput) -> TokenStream
             fn const_definition(attrs: &str, vis: &str) -> String
             {
                 let mut definition = String::from(attrs);
+                definition += #doc_attr;
                 definition += " ";
                 definition += vis;
                 definition += &{#def_impl};
@@ -323,4 +327,22 @@ fn get_field_idents(fields: &syn::punctuated::Punctuated<syn::Field, syn::token:
 fn get_field_types(fields: &syn::punctuated::Punctuated<syn::Field, syn::token::Comma>) -> Vec<&syn::Type>
 {
     fields.iter().map(|field|&field.ty).collect()
+}
+
+/// Parse DOC_ATTR to inherit docs
+fn get_docs(attrs: &[syn::Attribute]) -> Option<syn::Attribute>
+{
+    if attrs
+        .iter()
+        .any(|assoc_attr| assoc_attr.path.is_ident(DOC_ATTR))
+    {
+        attrs.iter()
+            .filter(|assoc_attr| assoc_attr.path.is_ident("doc"))
+            .next()
+            .map(syn::Attribute::clone)
+    }
+    else
+    {
+        None
+    }
 }
