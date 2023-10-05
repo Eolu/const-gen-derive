@@ -4,10 +4,11 @@ use quote::quote;
 use syn;
 
 const DOC_ATTR: &'static str = "inherit_doc";
+const ENUM_DOC_ATTR: &'static str = "inherit_docs";
 
 /// Derives the CompileConst trait for structs and enums. Requires that all
 /// fields also implement the CompileConst trait.
-#[proc_macro_derive(CompileConst, attributes(inherit_doc))]
+#[proc_macro_derive(CompileConst, attributes(inherit_doc, inherit_docs))]
 pub fn const_gen_derive(input: TokenStream) -> TokenStream 
 {
     impl_macro(&syn::parse(input).unwrap())
@@ -51,10 +52,11 @@ fn impl_macro(ast: &syn::DeriveInput) -> TokenStream
             }
         }
     };
+    let (doc_attr, enum_doc_attr) = get_docs(&ast.attrs, false);
     let def_impl: proc_macro2::TokenStream = match &ast.data
     {
         syn::Data::Struct(data) => struct_def_handler(name, generics, &data.fields),
-        syn::Data::Enum(data) => enum_def_handler(name, generics, data.variants.iter().collect()),
+        syn::Data::Enum(data) => enum_def_handler(name, generics, data.variants.iter().collect(), enum_doc_attr),
         syn::Data::Union(data) => 
         {
             let vis = get_field_visibilities(&data.fields.named);
@@ -74,7 +76,7 @@ fn impl_macro(ast: &syn::DeriveInput) -> TokenStream
             }
         }
     };
-    let doc_attr = get_docs(&ast.attrs).map_or(String::new(), |attr| quote!(#attr).to_string());
+    let doc_attr = doc_attr.map_or(String::new(), |attr| quote!(#attr).to_string());
     let gen = quote!
     {
         impl const_gen::CompileConst for #name #generics
@@ -260,10 +262,10 @@ fn enum_val_handler(name: &syn::Ident, var_name: &syn::Ident, fields: &syn::Fiel
 }
 
 /// Generate an enum definition
-fn enum_def_handler(name: &syn::Ident, generics: &syn::Generics, variants: Vec<&syn::Variant>) -> proc_macro2::TokenStream
+fn enum_def_handler(name: &syn::Ident, generics: &syn::Generics, variants: Vec<&syn::Variant>, enum_doc_attr: bool) -> proc_macro2::TokenStream
 {
     let arms: Vec<proc_macro2::TokenStream> = variants.into_iter()
-        .map(|v| enum_variant_def_handler(&v.attrs, &v.ident, &v.fields))
+        .map(|v| enum_variant_def_handler(&v.attrs, &v.ident, &v.fields, enum_doc_attr))
         .collect();
     quote!
     {
@@ -272,9 +274,17 @@ fn enum_def_handler(name: &syn::Ident, generics: &syn::Generics, variants: Vec<&
 }
 
 /// Generate an enum variant definition
-fn enum_variant_def_handler(attributes: &[syn::Attribute], var_name: &syn::Ident, fields: &syn::Fields) -> proc_macro2::TokenStream
+fn enum_variant_def_handler(attributes: &[syn::Attribute], var_name: &syn::Ident, fields: &syn::Fields, enum_doc_attr: bool) -> proc_macro2::TokenStream
 {
-    let doc_attr = get_docs(attributes).map_or(String::new(), |attr| quote!(#attr).to_string());
+    let (doc_attr, _) = get_docs(attributes, enum_doc_attr);
+    let doc_attr = if enum_doc_attr
+    {
+        doc_attr.map_or(String::new(), |attr| quote!(#attr).to_string())
+    }
+    else
+    {
+        String::new()
+    };
     match fields
     {
         syn::Fields::Named(f) => 
@@ -333,19 +343,27 @@ fn get_field_types(fields: &syn::punctuated::Punctuated<syn::Field, syn::token::
 }
 
 /// Parse DOC_ATTR to inherit docs
-fn get_docs(attrs: &[syn::Attribute]) -> Option<syn::Attribute>
+fn get_docs(attrs: &[syn::Attribute], enum_doc_attr: bool) -> (Option<syn::Attribute>, bool)
 {
+    let mut enum_doc_attr = enum_doc_attr;
     if attrs
         .iter()
-        .any(|assoc_attr| assoc_attr.path.is_ident(DOC_ATTR))
+        .any(|assoc_attr| 
+        {
+            if assoc_attr.path.is_ident(ENUM_DOC_ATTR)
+            {
+                enum_doc_attr = true;
+            }
+            assoc_attr.path.is_ident(DOC_ATTR) || enum_doc_attr
+        })
     {
-        attrs.iter()
+        (attrs.iter()
             .filter(|assoc_attr| assoc_attr.path.is_ident("doc"))
             .next()
-            .map(syn::Attribute::clone)
+            .map(syn::Attribute::clone), enum_doc_attr)
     }
     else
     {
-        None
+        (None, enum_doc_attr)
     }
 }
