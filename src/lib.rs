@@ -263,7 +263,7 @@ fn enum_val_handler(name: &syn::Ident, var_name: &syn::Ident, fields: &syn::Fiel
 fn enum_def_handler(name: &syn::Ident, generics: &syn::Generics, variants: Vec<&syn::Variant>) -> proc_macro2::TokenStream
 {
     let arms: Vec<proc_macro2::TokenStream> = variants.into_iter()
-        .map(|v| enum_variant_def_handler(&v.ident, &v.fields))
+        .map(|v| enum_variant_def_handler(&v.attrs, &v.ident, &v.fields))
         .collect();
     quote!
     {
@@ -272,8 +272,9 @@ fn enum_def_handler(name: &syn::Ident, generics: &syn::Generics, variants: Vec<&
 }
 
 /// Generate an enum variant definition
-fn enum_variant_def_handler(var_name: &syn::Ident, fields: &syn::Fields) -> proc_macro2::TokenStream
+fn enum_variant_def_handler(attributes: &[syn::Attribute], var_name: &syn::Ident, fields: &syn::Fields) -> proc_macro2::TokenStream
 {
+    let doc_attr = get_docs(attributes).map_or(String::new(), |attr| quote!(#attr).to_string());
     match fields
     {
         syn::Fields::Named(f) => 
@@ -286,7 +287,8 @@ fn enum_variant_def_handler(var_name: &syn::Ident, fields: &syn::Fields) -> proc
                 #( f.push_str(&format!("{}:{},", stringify!(#idents), <#types>::const_type())); )*
                 format!
                 (
-                    "{}{{{}}},", 
+                    "{} {}{{{}}},", 
+                    #doc_attr,
                     stringify!(#var_name), 
                     f
                 )
@@ -301,13 +303,14 @@ fn enum_variant_def_handler(var_name: &syn::Ident, fields: &syn::Fields) -> proc
                 #( f.push_str(&format!("{},", <#types>::const_type())); )*
                 format!
                 (
-                    "{}({}),", 
+                    "{} {}({}),", 
+                    #doc_attr,
                     stringify!(#var_name), 
                     f
                 )
             }}
         },
-        syn::Fields::Unit => quote!(format!("{},", stringify!(#var_name)))
+        syn::Fields::Unit => quote!(format!("{} {},", #doc_attr, stringify!(#var_name)))
     }
 }
 
