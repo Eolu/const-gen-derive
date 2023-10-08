@@ -59,14 +59,7 @@ fn impl_macro(ast: &syn::DeriveInput) -> TokenStream
         syn::Data::Enum(data) => enum_def_handler(name, generics, data.variants.iter().collect(), inner_doc_attr),
         syn::Data::Union(data) => 
         {
-            let docs = if inner_doc_attr
-            {
-                get_field_docs(&data.fields.named)
-            }
-            else
-            {
-                vec!()
-            };
+            let docs = get_field_docs(&data.fields.named, inner_doc_attr);
             let vis = get_field_visibilities(&data.fields.named);
             let idents = get_field_idents(&data.fields.named);
             let types = get_field_types(&data.fields.named);
@@ -123,14 +116,7 @@ fn struct_def_handler(name: &syn::Ident, generics: &syn::Generics, fields: &syn:
             let vis = get_field_visibilities(&f.named);
             let idents = get_field_idents(&f.named);
             let types = get_field_types(&f.named);
-            let docs = if inner_doc_attr
-            {
-                get_field_docs(&f.named)
-            }
-            else
-            {
-                vec!()
-            };
+            let docs = get_field_docs(&f.named, inner_doc_attr);
             quote!
             {
                 let mut f = String::new();
@@ -292,14 +278,7 @@ fn enum_def_handler(name: &syn::Ident, generics: &syn::Generics, variants: Vec<&
 /// Generate an enum variant definition
 fn enum_variant_def_handler(attributes: &[syn::Attribute], var_name: &syn::Ident, fields: &syn::Fields, inner_doc_attr: bool) -> proc_macro2::TokenStream
 {
-    let doc_attr = if inner_doc_attr
-    {
-        get_inner_docs(attributes)
-    }
-    else
-    {
-        None
-    }.map_or(String::new(), |attr| quote!(#attr).to_string());
+    let doc_attr = get_inner_docs(attributes, inner_doc_attr);
     match fields
     {
         syn::Fields::Named(f) => 
@@ -358,9 +337,9 @@ fn get_field_types(fields: &syn::punctuated::Punctuated<syn::Field, syn::token::
 }
 
 /// Get docs for fields
-fn get_field_docs(fields: &syn::punctuated::Punctuated<syn::Field, syn::token::Comma>) -> Vec<Option<syn::Attribute>>
+fn get_field_docs(fields: &syn::punctuated::Punctuated<syn::Field, syn::token::Comma>, inner_doc_attr: bool) -> Vec<Option<syn::Attribute>>
 {
-    fields.iter().map(|field| get_inner_docs(&field.attrs)).collect()
+    fields.iter().map(|field| get_inner_docs(&field.attrs, inner_doc_attr)).collect()
 }
 
 /// Parse DOC_ATTR to inherit docs
@@ -390,10 +369,11 @@ fn get_docs(attrs: &[syn::Attribute]) -> (Option<syn::Attribute>, bool)
 }
 
 /// Parse INNER_DOC_ATTR to inherit docs for fields or variants
-fn get_inner_docs(attrs: &[syn::Attribute]) -> Option<syn::Attribute>
+fn get_inner_docs(attrs: &[syn::Attribute], inner_doc_attr: bool) -> Option<syn::Attribute>
 {
     attrs.iter()
         .filter(|assoc_attr| assoc_attr.path.is_ident("doc"))
         .next()
+        .filter(|_| inner_doc_attr || attrs.iter().any(|attr| attr.path.is_ident("inherit_doc")))
         .map(syn::Attribute::clone)
 }
