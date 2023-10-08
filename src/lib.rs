@@ -4,7 +4,7 @@ use quote::quote;
 use syn;
 
 const DOC_ATTR: &'static str = "inherit_doc";
-const ENUM_DOC_ATTR: &'static str = "inherit_docs";
+const INNER_DOC_ATTR: &'static str = "inherit_docs";
 
 /// Derives the CompileConst trait for structs and enums. Requires that all
 /// fields also implement the CompileConst trait.
@@ -52,20 +52,28 @@ fn impl_macro(ast: &syn::DeriveInput) -> TokenStream
             }
         }
     };
-    let (doc_attr, enum_doc_attr) = get_docs(&ast.attrs, false);
+    let (doc_attr, inner_doc_attr) = get_docs(&ast.attrs);
     let def_impl: proc_macro2::TokenStream = match &ast.data
     {
-        syn::Data::Struct(data) => struct_def_handler(name, generics, &data.fields),
-        syn::Data::Enum(data) => enum_def_handler(name, generics, data.variants.iter().collect(), enum_doc_attr),
+        syn::Data::Struct(data) => struct_def_handler(name, generics, &data.fields, inner_doc_attr),
+        syn::Data::Enum(data) => enum_def_handler(name, generics, data.variants.iter().collect(), inner_doc_attr),
         syn::Data::Union(data) => 
         {
+            let docs = if inner_doc_attr
+            {
+                get_field_docs(&data.fields.named)
+            }
+            else
+            {
+                vec!()
+            };
             let vis = get_field_visibilities(&data.fields.named);
             let idents = get_field_idents(&data.fields.named);
             let types = get_field_types(&data.fields.named);
             quote!
             {
                 let mut f = String::new();
-                #( f.push_str(&format!("{} {}: {}, ", stringify!(#vis), stringify!(#idents), <#types>::const_type())); )*
+                #( f.push_str(&format!("{} {} {}: {}, ", stringify!(#docs), stringify!(#vis), stringify!(#idents), <#types>::const_type())); )*
                 format!
                 (
                     "union {}{}{{ {}}}", 
@@ -106,7 +114,7 @@ fn impl_macro(ast: &syn::DeriveInput) -> TokenStream
 }
 
 /// Generate a struct definition
-fn struct_def_handler(name: &syn::Ident, generics: &syn::Generics, fields: &syn::Fields) -> proc_macro2::TokenStream
+fn struct_def_handler(name: &syn::Ident, generics: &syn::Generics, fields: &syn::Fields, inner_doc_attr: bool) -> proc_macro2::TokenStream
 {
     match fields
     {
@@ -115,10 +123,18 @@ fn struct_def_handler(name: &syn::Ident, generics: &syn::Generics, fields: &syn:
             let vis = get_field_visibilities(&f.named);
             let idents = get_field_idents(&f.named);
             let types = get_field_types(&f.named);
+            let docs = if inner_doc_attr
+            {
+                get_field_docs(&f.named)
+            }
+            else
+            {
+                vec!()
+            };
             quote!
             {
                 let mut f = String::new();
-                #( f.push_str(&format!("{} {}: {}, ", stringify!(#vis), stringify!(#idents), <#types>::const_type())); )*
+                #( f.push_str(&format!("{} {} {}: {}, ", stringify!(#docs), stringify!(#vis), stringify!(#idents), <#types>::const_type())); )*
                 format!
                 (
                     "struct {}{}{{ {}}}", 
@@ -262,10 +278,10 @@ fn enum_val_handler(name: &syn::Ident, var_name: &syn::Ident, fields: &syn::Fiel
 }
 
 /// Generate an enum definition
-fn enum_def_handler(name: &syn::Ident, generics: &syn::Generics, variants: Vec<&syn::Variant>, enum_doc_attr: bool) -> proc_macro2::TokenStream
+fn enum_def_handler(name: &syn::Ident, generics: &syn::Generics, variants: Vec<&syn::Variant>, inner_doc_attr: bool) -> proc_macro2::TokenStream
 {
     let arms: Vec<proc_macro2::TokenStream> = variants.into_iter()
-        .map(|v| enum_variant_def_handler(&v.attrs, &v.ident, &v.fields, enum_doc_attr))
+        .map(|v| enum_variant_def_handler(&v.attrs, &v.ident, &v.fields, inner_doc_attr))
         .collect();
     quote!
     {
@@ -274,17 +290,16 @@ fn enum_def_handler(name: &syn::Ident, generics: &syn::Generics, variants: Vec<&
 }
 
 /// Generate an enum variant definition
-fn enum_variant_def_handler(attributes: &[syn::Attribute], var_name: &syn::Ident, fields: &syn::Fields, enum_doc_attr: bool) -> proc_macro2::TokenStream
+fn enum_variant_def_handler(attributes: &[syn::Attribute], var_name: &syn::Ident, fields: &syn::Fields, inner_doc_attr: bool) -> proc_macro2::TokenStream
 {
-    let (doc_attr, _) = get_docs(attributes, enum_doc_attr);
-    let doc_attr = if enum_doc_attr
+    let doc_attr = if inner_doc_attr
     {
-        doc_attr.map_or(String::new(), |attr| quote!(#attr).to_string())
+        get_inner_docs(attributes)
     }
     else
     {
-        String::new()
-    };
+        None
+    }.map_or(String::new(), |attr| quote!(#attr).to_string());
     match fields
     {
         syn::Fields::Named(f) => 
@@ -342,28 +357,43 @@ fn get_field_types(fields: &syn::punctuated::Punctuated<syn::Field, syn::token::
     fields.iter().map(|field|&field.ty).collect()
 }
 
-/// Parse DOC_ATTR to inherit docs
-fn get_docs(attrs: &[syn::Attribute], enum_doc_attr: bool) -> (Option<syn::Attribute>, bool)
+/// Get docs for fields
+fn get_field_docs(fields: &syn::punctuated::Punctuated<syn::Field, syn::token::Comma>) -> Vec<Option<syn::Attribute>>
 {
-    let mut enum_doc_attr = enum_doc_attr;
+    fields.iter().map(|field| get_inner_docs(&field.attrs)).collect()
+}
+
+/// Parse DOC_ATTR to inherit docs
+fn get_docs(attrs: &[syn::Attribute]) -> (Option<syn::Attribute>, bool)
+{
+    let mut inner_doc_attr = false;
     if attrs
         .iter()
         .any(|assoc_attr| 
         {
-            if assoc_attr.path.is_ident(ENUM_DOC_ATTR)
+            if assoc_attr.path.is_ident(INNER_DOC_ATTR)
             {
-                enum_doc_attr = true;
+                inner_doc_attr = true;
             }
-            assoc_attr.path.is_ident(DOC_ATTR) || enum_doc_attr
+            assoc_attr.path.is_ident(DOC_ATTR) || inner_doc_attr
         })
     {
         (attrs.iter()
             .filter(|assoc_attr| assoc_attr.path.is_ident("doc"))
             .next()
-            .map(syn::Attribute::clone), enum_doc_attr)
+            .map(syn::Attribute::clone), inner_doc_attr)
     }
     else
     {
-        (None, enum_doc_attr)
+        (None, inner_doc_attr)
     }
+}
+
+/// Parse INNER_DOC_ATTR to inherit docs for fields or variants
+fn get_inner_docs(attrs: &[syn::Attribute]) -> Option<syn::Attribute>
+{
+    attrs.iter()
+        .filter(|assoc_attr| assoc_attr.path.is_ident("doc"))
+        .next()
+        .map(syn::Attribute::clone)
 }
