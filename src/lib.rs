@@ -292,7 +292,7 @@ fn enum_variant_def_handler(attributes: &[syn::Attribute], var_name: &syn::Ident
                 format!
                 (
                     "{} {}{{{}}},", 
-                    #doc_attr,
+                    stringify!(#doc_attr),
                     stringify!(#var_name), 
                     f
                 )
@@ -308,13 +308,13 @@ fn enum_variant_def_handler(attributes: &[syn::Attribute], var_name: &syn::Ident
                 format!
                 (
                     "{} {}({}),", 
-                    #doc_attr,
+                    stringify!(#doc_attr),
                     stringify!(#var_name), 
                     f
                 )
             }}
         },
-        syn::Fields::Unit => quote!(format!("{} {},", #doc_attr, stringify!(#var_name)))
+        syn::Fields::Unit => quote!(format!("{} {},", stringify!(#doc_attr), stringify!(#var_name)))
     }
 }
 
