@@ -3,8 +3,8 @@ use proc_macro2::Span;
 use quote::quote;
 use syn;
 
-const DOC_ATTR: &'static str = "inherit_doc";
-const INNER_DOC_ATTR: &'static str = "inherit_docs";
+const DOC_ATTR: &str = "inherit_doc";
+const INNER_DOC_ATTR: &str = "inherit_docs";
 
 /// Derives the CompileConst trait for structs and enums. Requires that all
 /// fields also implement the CompileConst trait.
