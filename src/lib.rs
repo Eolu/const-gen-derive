@@ -98,6 +98,7 @@ fn impl_macro(ast: &syn::DeriveInput) -> TokenStream
                 definition += #doc_attr;
                 definition += " ";
                 definition += vis;
+                definition += " ";
                 definition += &{#def_impl};
                 definition
             }
